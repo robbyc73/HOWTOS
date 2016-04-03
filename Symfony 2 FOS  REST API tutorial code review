@@ -1,0 +1,53 @@
+https://codereviewvideos.com/course/restful-apis-with-symfony2-fosrestbundle/video/getting-started
+
+//pull initial tutorial from repo 
+//So first clone a repository (which does initially checkout the latest version), then checkout the version you actually want.
+git clone https://github.com/a6software/symfony2-rest-example.git
+
+//change into the project dir
+cd symfony2-rest-example
+
+// look for the version hash you want with
+git log
+
+//checkout
+git checkout 74c10053a72570013ccd0b8226eb0065c6a34faa
+
+//install dependencies
+composer install
+
+//cache perms
+chmod -R 777 app/cache app/logs
+
+//console perms
+chmod u+x app/console
+
+//add the db(if doesnt already exist), schema and fixtures
+app/console doctrine:database:create
+app/console doctrine:schema:create
+app/console doctrine:fixtures:load
+
+//add
+//config/routing.yml
+artists:
+    prefix:     /artists
+    resource:   "@CodeReviewRestBundle/Resources/config/routing/artists.yml"
+    type: rest
+
+//artists.yml
+artist_get:
+    pattern: /{id}
+    defaults: { _controller: CodeReviewRestBundle:Artist:get, _format: json }
+    methods: GET
+    requirements:
+        id: \d+
+
+//add controller ArtistController.php
+
+
+
+
+
+
+
+

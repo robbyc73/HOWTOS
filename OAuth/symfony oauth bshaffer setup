@@ -1,0 +1,160 @@
+// directories configured in apache
+/var/www/webservices
+
+
+//note proxy must be added to /etc/environment as address without http:// prefix, otherwise symfony throws an error!
+
+sudo curl --proxy 10.222.109.10:80 -LvsS http://symfony.com/installer -o /usr/local/bin/symfony
+
+sudo curl -vLsS http://symfony.com/installer:80 -o /usr/local/bin/symfony
+
+sudo chmod a+x /usr/local/bin/symfony
+
+//install composer
+curl --proxy 10.222.109.10:80 -LvsS https://getcomposer.org/installer | php
+sudo mv composer.phar /usr/local/bin/composer
+
+// change to your projects dir e.g. /var/www/webservices/BigRedSkyASAP/symfony_projects
+export HTTP_PROXY=10.222.109.10:80
+//give write permissions before running this command, as sudo doesnt 
+// see proxy settings?
+symfony new MobileJobBoard
+
+//make sure date/time setting in php.ini set for both apache2 and php cli
+
+//run from symfonys web server
+cd TestProject ;
+php app/console server:run
+
+//stop
+php app/console server:stop
+
+// access app url via apache
+http://services/BigRedSkyASAP/MobileJobBoard/web/app.php
+
+// give write permissions to cache directory so doesnt throw error
+chmod -R 777 /var/www/webservices/BigRedSkyASAP/MobileJobBoard/app/cache
+cd ProjectDirectory
+
+//update project dependencies, need b shaeffers oauth2 library, add following line to composer.json under require section, do this for any other libraries as required
+"bshaffer/oauth2-server-php": "~1.8"
+
+//then run
+composer update
+
+//test everything is working by going to e.g.
+// http://localhost/BigRedSkyASAP/MobileJobBoard/web/app_dev.php/
+// should get a welcome to symfony message
+
+//DB connection to app/config/parameters.yml
+    database_driver: pdo_pgsql
+    database_host: 10.222.110.106
+    database_port: 6543
+    database_name: BigRedSkyASAPDev2
+    database_user: postgres
+    database_password: postgres
+
+//change db driver to pdo_pgsql in app/config/config.yml under dbal
+        driver:   pdo_pgsql
+
+// add test controller page under src/AppBundle/Controller dir, use statements as required e.g. JsonResponse. instantiate db conn here for now
+
+// add test model under src/AppBundle/Model dir, pass through db conn as required. add use Doctrine\DBAL\Connection; statement
+
+// route for action in Controller to app/config/routing.yml
+jobBoardInfo:
+    path: /jobBoardInfo/{name}
+    defaults: { _controller: AppBundle:JobBoard:jobBoardInfo }
+
+
+// follow thse links for howto on config oauth2 server
+http://bshaffer.github.io/oauth2-server-php-docs/cookbook/
+http://bshaffer.github.io/oauth2-server-php-docs/overview/jwt-access-tokens/
+
+
+1. create token controller utilizing Oauth2 server
+curl -i -v http://localhost/BigRedSkyASAP/MobileJobBoard/web/app_dev.php/jobBoardInfo/token -u 'ClientID_One:CLIENT_SECRET_ONE' -d "grant_type=client_credentials"
+
+
+//standalone 
+curl -i -v http://localhost/BigRedSkyASAP/OAuth2/token_jwt.php -u 'ClientID_One:CLIENT_SECRET_ONE' -d "grant_type=client_credentials"
+
+
+// need apache rewrite to accept authorization type bearer
+sudo a2enmod rewrite
+sudo service apache2 restart
+
+//add rewrite rule to desired virtual host in apache conf e.g. /etc/apache2/sites-available/000-default.conf
+    RewriteEngine On
+    RewriteCond %{HTTP:Authorization} .+
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+
+/* add service */
+
+//create class under src/AppBundle/Service/Http.php e.g.
+namespace MyBundle\Service;
+
+class Http
+{    
+    public function performRequest($siteUrl)
+    {
+        // Code to make the external request goes here
+        // ...probably using cUrl
+    }
+}
+
+//register as a service in app/config/config.yml
+services:
+    http:
+        class: MyBundle\Service\Http
+
+
+// in your controller class src/AppBundle/Controller/SomeController.php access the service
+$this->get("http")->performRequest("http://localhost/BigRedSkyASAP/OAuth2/resource_jwt.php?access_token=".$token[1]);
+
+
+
+
+
+//having connection issues
+export HTTP_PROXY="http://10.222.109.10"
+sudo composer diagnose 
+
+
+// install memcached and couchbase
+sudo aptitude install php5-memcached php-ext-couchbase memcached
+
+
+
+
+//edit /etc/php5/apache2/php.ini add following to [Session]
+    [Session]
+    session.save_handler = memcached
+    session.save_path = "localhost:11211"
+    session.gc_maxlifetime = 3600
+
+
+// install telnetd, otherwise cant login
+sudo apt-get install telnetd
+
+//start memcached
+/etc/init.d/memcached start
+
+
+//install couchbase
+sudo apt-get install libssl0.9.8
+
+
+// restart apache
+sudo service apache2 restart
+
+
+
+
+
+
+
+
+
+

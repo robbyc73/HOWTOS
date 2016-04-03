@@ -1,0 +1,64 @@
+//setup bshaffers oauth2 server bundle
+composer create-project symfony/framework-standard-edition /var/www/html/bshafferapi 2.4.10
+
+
+// configure db
+
+parameters:
+    database_driver: pdo_mysql
+    database_host: 127.0.0.1
+    database_port: null
+    database_name: bshafferapi
+    database_user: root
+    database_password: root
+    mailer_transport: smtp
+    mailer_host: 127.0.0.1
+    mailer_user: null
+    mailer_password: null
+    locale: en
+    secret: ThisTokenIsNotSoSecretChangeIt
+
+app/console doctrine:database:create
+app/console doctrine:schema:update --force
+
+//add to app/config/routing/yml
+oauth2_server:
+    resource: "@OAuth2ServerBundle/Controller/"
+    type:     annotation
+    prefix:   /
+
+//create a scope and a client
+ app/console OAuth2:CreateScope test test
+app/console OAuth2:CreateClient 620 http://localhost client_credentials test
+
+//output from above
+Client 620 created with secret ktprep09iaok08owc4444gksgskkg0w
+
+//set perms on cache dirs
+//set access for dirs properly
+HTTPDUSER=`ps aux | grep -E '[a]pache|[h]ttpd|[_]www|[w]ww-data|[n]ginx' | grep -v root | head -1 | cut -d\  -f1` ;
+sudo setfacl -R -m u:"$HTTPDUSER":rwX -m u:`whoami`:rwX app/cache app/logs ;
+sudo setfacl -dR -m u:"$HTTPDUSER":rwX -m u:`whoami`:rwX app/cache app/logs
+
+//get a token using client credentials
+curl http://localhost/bshafferapi/web/app_dev.php/token -d 'grant_type=client_credentials&client_id=620&client_secret=ktprep09iaok08owc4444gksgskkg0w&scope=test'
+
+//generate a key
+openssl genrsa -out jwt/privkey.pem 2048
+openssl rsa -in jwt/privkey.pem -pubout -out jwt/pubkey.pem
+
+//add to parameters.yml config
+    jwt_private_key_path: '%kernel.root_dir%/jwt/privkey.pem'
+    jwt_public_key_path: '%kernel.root_dir%/jwt/pubkey.pem'
+
+//verify the token
+curl http://localhost/bshafferapi/web/app_dev.php/verify -d 'access_token=eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJpZCI6ImM0MDgyNjYzYmY1Y2M5ODExYzI2ZTliODQ1ZjExNjY2MzYxM2IwMzEiLCJqdGkiOiJjNDA4MjY2M2JmNWNjOTgxMWMyNmU5Yjg0NWYxMTY2NjM2MTNiMDMxIiwiaXNzIjoiIiwiYXVkIjoiNjIwIiwic3ViIjpudWxsLCJleHAiOjE0NTY4MDc5NDQsImlhdCI6MTQ1NjgwNDM0NCwidG9rZW5fdHlwZSI6ImJlYXJlciIsInNjb3BlIjoic2NvcGUifQ.U1drPFA5vzxn0HmarKmwr0SBmvE4hzHj_oYnF6dIDddvu-OBWFsTX8lBXpkEA1OXOHWoUpdNJeu1bgQiUHkh8q6bB8tgnh_dH3-7Yr88po2BpDega9rAUjwJfKS-666-DBB50WSp0kB7AlL8vkprlfU9q_V7RTDDj4mfZm0NHZLNwwV04Mjr-hRSl-AdXc9j08lWqqBXt8i1hB8gnyxp0jqXZbaBgMQJk8eQHf2KkdUigEu3Vd5RfsS7vCnox-tM3TybS4kGECu_Uxgs03GJpk59lbgFSr2wdGT_bfooc4FlsLf0KoYZVA6W4eUT2ABTMlyNdCjsKCXYJ0Ggp9ZpXw'
+
+
+
+//follow unstructions here
+https://github.com/bshaffer/oauth2-server-bundle
+
+
+
+

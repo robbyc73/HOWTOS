@@ -1,0 +1,285 @@
+//behat.org
+
+//test projects, behat, this is the full example and behat-ls, which contains the series of steps building up to full testing functionality
+
+//make a behat directory and create a composer.json file
+mkdir behat ;
+cd behat ;
+touch composer.json
+
+//add following to composer.json
+{
+    "require": {
+        "behat/mink": "1.4@stable",
+        "behat/mink-goutte-driver": "*",
+        "behat/mink-selenium2-driver": "*",
+        "behat/behat": "2.4@stable",
+        "behat/mink-extension": "~1.2.0",
+        "guzzle/guzzle": "*"
+    },
+    "minimum-stability": "dev",
+    "config": {
+        "bin-dir": "bin/"
+    }
+}
+
+// run composer install
+composer install --prefer-dist
+
+
+//for symfony 3 add behat via composer require command, and add the min stability dev to composer json beforehand
+//then install all other extensions etc
+composer require --dev behat/behat
+composer require --dev behat/mink
+composer require --dev behat/mink-goutte-driver
+composer require --dev behat/mink-selenium2-driver
+composer require --dev behat/mink-extension
+composer require --dev guzzle/guzzle
+
+
+
+
+//add a behat.yml file to root dir with the following config
+// - Installation request for behat/mink-extension ~1.2.0 -> satisfiable by behat/mink-extension[1.2.x-dev, v1.2.0].
+
+default:
+    extensions:
+        Behat\MinkExtension\Extension:
+            goutte: ~
+            selenium2: ~
+            base_url: http://en.wikipedia.org
+
+// for testing own admin site change base_url to
+http://services/starwarsevents/web/app_dev.php/
+
+//initialize behat, this will create a feature context file
+bin/behat --init
+
+//for symfony 3, was located in vendor dir
+vendor/behat/behat/bin/behat --init
+
+
+//modify the feature context file to use/extend class MinkContext
+
+// describe the websites behaviour and run some functional tests against
+wikipedia will be the website, previously specified in behat.yml
+
+//create a features file in feature dir
+search.feature
+
+// describe feature by using a specific 4 line syntax
+// add specific search scenario with actions 
+Feature: Search
+    In order to find a word definition
+    As a website user
+    I am able to search for a word
+
+    Scenario: Search for a word that exists
+      Given I am on "/wiki/MainPage"
+      When I fill in "search" with "Velociraptor"
+      And I press "searchButton"
+      Then I should see "an enlarged sickle-shaped claw"
+
+//run behat, this will run the test using a browser called goo(doesnt support javascript)
+bin/behat
+
+//output should be something like this
+Feature: Search
+  In order to find a word definition
+  As a website user
+  I am able to search for a word
+
+  Scenario: Search for a word that exists              # features/search.feature:6
+    Given I am on "/wiki/MainPage"                     # FeatureContext::visit()
+    When I fill in "search" with "Velociraptor"        # FeatureContext::fillField()
+    And I press "searchButton"                         # FeatureContext::pressButton()
+    Then I should see "an enlarged sickle-shaped claw" # FeatureContext::assertPageContainsText()
+
+1 scenario (1 passed)
+4 steps (4 passed)
+0m6.556s
+
+
+// for testing with javascript, download selenium server and run
+java -jar  ~/Downloads/selenium-server-standalone-2.52.0.jar
+
+//add javascript option to search.feature
+  @javascript
+  Scenario: Search for a word that exists
+
+//then behat again, will open up a browser and automate the search actionthis time
+bin/behat
+
+
+//php unit to use assert statements etc., add require to FeatureContext.php also
+composer require --dev "phpunit/phpunit=4.8.*"
+
+  require_once '/var/www/html/behat-ls/vendor/autoload.php';
+   require_once '/var/www/html/behat-ls/vendor/phpunit/phpunit/src/Framework/Assert/Functions.php';
+
+//when running behat with new scenarios, if given missing step definition
+// and copy into FeatureContext.php
+
+//add a Background to apply to multiple scenarios, addtional given required for a scenario then prefix with 'And' to continue on from backgroun
+  Background:
+    Given I have a file named "john"
+
+
+/* Mink */
+//Mink allows behat to control a browser via PHP code
+//an example of a script run from the root dir
+//use the link session object to visit the page
+// important objects, the driver, session page and named selector
+<?php
+
+require __DIR__.'/vendor/autoload.php';
+
+use Behat\Mink\Driver\GoutteDriver;
+use Behat\Mink\Session;
+
+$driver = new GoutteDriver();
+
+$session = new Session($driver);
+
+$session->start();
+
+$session->visit('http://jurassicpark.wikia.com');
+
+echo "Status code: ". $session->getStatusCode() . "\n";
+echo "Current URL: ". $session->getCurrentUrl() . "\n";
+
+$page = $session->getPage();
+
+echo "First 160 chars: ".substr($page->getText() , 0, 160) . "\n";
+
+?>
+
+//can also find certain elements on the page by css selector
+$element = $page->find('css', '.subnav-2 li a');
+
+echo "The link text is: ". $element->getText() . "\n";
+
+// or by element text
+$selectorsHandler = $session->getSelectorsHandler();
+$element = $page->find(
+    'named',
+    array(
+        'link',
+        $selectorsHandler->xpathLiteral('MinkExtension')
+    )
+);
+
+echo sprintf(
+    "The URL is '%s'\n",
+    $element->getAttribute('href')
+);
+
+//use selenium instead, make sure you turn on the standlaone server
+// modify the code with the following
+use Behat\Mink\Driver\Selenium2Driver;
+
+$driver = new Selenium2Driver;
+
+//and add stop
+$session->stop();
+
+
+//behat and mink together, install the mink extension in composer and composer update
+"behat/mink-extension": "*"
+
+//list all defns when extending mink conext class get a bunch of others which are handy such as follow, move forward, press button etc.
+bin/behat -dl
+
+Given /^I have a file named "([^"]*)"$/
+Given /^a directory named "([^"]*)"$/
+ When /^I run "([^"]*)"$/
+Given /^I should see "([^"]*)" in the output$/
+
+
+//testing the wikipedia page again with Background, Scenario Outline, and examples
+Background:
+  Given I am on "/wiki/Main_Page"
+
+Scenario Outline: Searching for a specific page
+  When I fill in "search" with "<search>"
+  And I press "searchButton"
+  Then I should see "<expectation>"
+
+  Examples:
+    | search             | expectation                      |
+    | Velociraptor       | an enlarged sickle-shaped claw   |
+    | Tyrannosaurus Bill | Search results                   |
+
+
+// testing an alternate profile in behat.yml, e.g. the french page
+fr:
+  extensions:
+    Behat\MinkExtension\Extension:
+      base_url: http://fr.wikipedia.org
+
+//cmd
+bin/behat features/search.feature -p fr
+
+//try to use natural language instead of referencing html name  attributes in a feature e.g
+  Scenario Outline: Searching for a specific page
+    When I fill in search box with "<search>"
+    And I press search button
+    Then I should see "<expectation>"
+
+//and append the required code snippets for feature context
+bin/behat features/search.feature --append-snippets
+
+//add the behat step classes to use natural language in your functions
+use Behat\Behat\Context\Step\Given;
+use Behat\Behat\Context\Step\When;
+use Behat\Behat\Context\Step\Then;
+
+
+//the functions
+    /**
+     * @When /^I fill in search box with "([^"]*)"$/
+     */
+    public function iFillInTheSearchBoxWith($searchTerm)
+    {
+        return new When(sprintf(
+            'I fill in "search" with "%s"',
+            $searchTerm
+        ));
+    }
+
+    /**
+     * @Given /^I press the search button$/
+     */
+    public function iPressTheSearchButton()
+    {
+        return new When('I press "searchButton"');
+    }
+
+
+// see behat project for example of testing against starwarsevents
+
+//install symfony2 ext show can access bootstrap and access kernel
+composer require --dev behat/symfony2-extension "1.1.*@dev"
+
+//TODO accessing kernel after installing symfony 2 extension, see test app example
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

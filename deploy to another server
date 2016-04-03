@@ -1,0 +1,71 @@
+//once all changes have been committed to git to deploy on another server
+cd /var/www/html ;
+git clone https://github.com/robbyc73/starwarsevents.git starwarsevents
+cd sw.com
+
+// or have code existing, merely want to update with changes
+cd /var/www/html/starwarsevents ;
+git pull https://github.com/robbyc73/starwarsevents.git
+
+
+//if not master then switch to branch, may need to add deploy key to server
+
+
+// add a virtual host to apache config 000-default.conf
+<VirtualHost 127.0.0.1:80>
+    DocumentRoot /var/www/html/sw.com/web
+    ServerName sw.com
+    ErrorLog ${APACHE_LOG_DIR}/error.log
+    RewriteEngine On
+	RewriteCond %{HTTP:Authorization} .+
+	RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+</VirtualHost>
+
+// add server name to apache, /etc/hosts
+127.0.0.1	localhost admin jobboard services sw.com
+
+//get all the dependencies installed with composer, use same parameters as before except different db name!
+composer install
+
+    database_host: localhost
+    database_port: null
+    database_name: yoda_event_prod
+    database_user: root
+    database_password: root
+    mailer_transport: smtp
+    mailer_host: 127.0.0.1
+    mailer_user: null
+    mailer_password: null
+    secret: 79b6a61acf8bd7127718416ea030409179eee19e
+    host:     "localhost"
+    our_assets_version: 5-empire //remove this to avoid error from parameter.yml, config.yml
+
+
+//create the db, install the schema and fixtures
+bin/console doctrine:database:create
+bin/console doctrine:schema:create 
+bin/console doctrine:fixtures:load
+
+//set perms on cache dirs
+//give access to cache dirs
+sudo chmod -R 777 var/cache var/logs var/sessions
+
+// dump css js files if didnt push to git
+php bin/console assetic:dump --env=prod
+
+//install ugilfy if above fails and run again
+
+//get any changes from repository
+git pull
+
+//clear cache, dump assetic assets reset perms on var/cache dir etc!
+bin/console cache:clear --env=dev ;
+bin/console assetic:dump ;
+sudo chmod -R 777 var/cache var/logs var/sessions
+ 
+
+
+
+
+
+

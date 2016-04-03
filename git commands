@@ -1,0 +1,64 @@
+//create a repo first at github!
+
+//first create a gitignore file
+//add a new project
+touch .gitignore
+
+//add ignore files/dirs to .gitignore
+/web/bundles/
+/app/bootstrap*
+/app/cache/*
+/app/logs/*
+/vendor/
+/app/config/parameters.yml
+
+//Create a new repository on the command line
+echo "# behat3" >> README.md ;
+git init ;
+git add --all;
+git commit -am "first commit" ;
+git remote add origin https://github.com/robbyc73/behat3;
+git push -u origin master
+
+//push an existing
+git remote add origin https://github.com/robbyc73/behat-test-star-wars-events.git
+git push -u origin master
+
+
+
+
+
+//git howto
+http://symfony2-document.readthedocs.org/en/latest/cookbook/workflow/new_project_git.html
+
+
+
+// update an existing project
+git add --all
+git status
+
+//commit all changes
+git commit -am 'finished chapter 3'
+
+git config --global user.name "Rob campbell"
+git config --global user.email robcampbell73@gmail.com
+
+// push all changes to master, requires username/password
+git push https://github.com/robbyc73/symfony-stuff.git
+
+
+// .gitignore file tells git to ignore whatever is contained within
+
+
+
+// pull down all changes from remote master, deleting all local changes
+git fetch --all
+git reset --hard origin/master
+
+
+
+
+
+
+
+

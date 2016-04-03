@@ -1,0 +1,136 @@
+//ref http://www.inanzzz.com/index.php/post/8kgb/creating-a-symfony-oauth2-api-or-server-that-uses-client-credentials-grant-type
+//create new project
+symfony new api
+cd api
+
+//give access to cache dirs
+HTTPDUSER=`ps aux | grep -E '[a]pache|[h]ttpd|[_]www|[w]ww-data|[n]ginx' | grep -v root | head -1 | cut -d\  -f1` ;
+sudo setfacl -R -m u:"$HTTPDUSER":rwX -m u:`whoami`:rwX var/cache var/logs var/sessions ;
+sudo setfacl -dR -m u:"$HTTPDUSER":rwX -m u:`whoami`:rwX var/cache var/logs var/sessions
+
+// get oauth2 server bundle
+composer require friendsofsymfony/oauth-server-bundle
+
+//update AppKernel.php
+new FOS\OAuthServerBundle\FOSOAuthServerBundle(),
+
+//modify parameter.yml for db, user root, pwd root, then create by using mysql from the cmd line, because database:create doesnt work?
+mysql -u root -p
+create database symfony
+
+
+//add FOS config to app/config/config.yml
+fos_oauth_server:
+    db_driver:           orm
+    client_class:        ApiServerBundle\Entity\Client
+    access_token_class:  ApiServerBundle\Entity\AccessToken
+    refresh_token_class: ApiServerBundle\Entity\RefreshToken # Not implemented in this example
+    auth_code_class:     FOS\OAuthServerBundle\Entity\AuthCode # Not implemented in this example
+    service:
+        options:
+            access_token_lifetime: 3600
+
+//bin/console generate:bundle --namespace=ApiServerBundle, routing.yml will be automatically updated
+
+//add ApiServerController, leave out ref to service for now
+
+// update routing.yml
+fos_oauth_server_token:
+    resource: "@FOSOAuthServerBundle/Resources/config/routing/token.xml"
+
+//update security.yml
+security:
+    providers:
+        in_memory:
+            memory: ~
+
+    firewalls:
+        oauth_token:
+            pattern:  ^/oauth/v2/token
+            security: false
+
+        secured_area:
+            pattern:    ^/
+            fos_oauth:  true
+            stateless:  true
+
+    access_control:
+        - { path: ^/, roles: [ IS_AUTHENTICATED_FULLY ] }
+
+// add Client, AccessToken, and Refresh token entities
+
+//add to db
+//bin/console doctrine:database:create, not working?
+bin/console doctrine:schema:update --dump-sql
+
+
+//create a command class to create a client from the command line, follow example from http://www.inanzzz.com/index.php/post/8kgb/creating-a-symfony-oauth2-api-or-server-that-uses-client-credentials-grant-type also, then run the command
+bin/console oauth:client:create --grant-type="client_credentials" --brs-clientid="620" --brs-jobboardid="486"
+
+//should get something like this:
+OAuth client has been created...
+Public ID: 1_5wkpuwc59mgwgskoso4cw8s4k4scg8wkc8kgskwgogssc8scck
+Secret ID: 180owp7xglnko4w00ksko4so8og048sockc4kck4g0gocoo08g
+
+
+//try getting a token from the endpoint
+http://localhost/api/web/app_dev.php/oauth/v2/token?client_id=1_4ysktm1l5qwwsc488okksksggook44wkgss4cksgcsc0o44swo&client_secret=4qac27q56j6s80skcog0ksws8os844wggss4sosw4g80w8gsgk&grant_type=client_credentials
+
+//now access the resource with the provided token via a GET request
+curl -H "Authorization: Bearer NDcwY2E1ZDE3MWFhYTBiOWIyYjgyYTJlYTA5OTMzNDhjYmI5ZThmMzc0Yzg3YTVhYjU2ZmJjOGVmMDUwZGFjYQ" http://localhost/api/web/app_dev.php/api/client/620/jobboard/486
+
+//access the resource via a post request
+curl -v -X POST -H "Authorization: Bearer OWIzMmE1YzYzNWM1MTEwMTI3Mjc0NTA5OTljNGVkYmM1ODVlNmVmZjc5ODczZTc5MzlmNzQ0M2VjZGRiMWVmZA" 'Content-Type:application/json' -d '{"hello":"world"}' http://localhost/api/web/app_dev.php/api/jobboard
+
+
+// now change to point to a BRS DB
+
+//set up from cmd line
+psql -h 127.0.0.1 -p 5432 -U postgres
+
+ CREATE DATABASE "BigRedSkyASAP"
+  WITH OWNER = postgres
+       TEMPLATE template0
+       ENCODING = 'SQL_ASCII'
+       TABLESPACE = pg_default
+       
+ GRANT ALL PRIVILEGES ON DATABASE BigRedSkyASAP to postgres;
+
+//retrieve tar
+scp  m0135986@10.222.110.108:/backups/DB-BigRedSkyASAPDECSSA-2016-02-15.tar . 
+
+//restore from tar
+sudo pg_restore --host "localhost" --port "5432" --username "postgres" --dbname "BigRedSkyASAP" --role "postgres" --verbose DB-BigRedSkyASAP-2016-02-15.tar
+ 
+ psql -h 127.0.0.1 -p 5432 -d BigRedSkyASAP -U postgres
+
+// change db config
+    database_driver: pdo_pgsql
+    database_host: 127.0.0.1
+    database_port: 5432
+    database_name: BigRedSkyASAP
+    database_user: postgres
+    database_password: postgres
+
+
+//add client jobboard check on the token via a service, passing in the required container args
+    client_jobboard:
+        class: ApiServerBundle\Manager\ClientJobBoardManager
+        arguments: ["@database_connection","@fos_oauth_server.access_token_manager","@security.token_storage"]
+
+//create the above mentioned class retrieving the client's brs id's through the token object
+
+// call client_jobboard function in controller, returning false if cid/jid doesnt match those stored in client object
+
+
+
+
+
+
+
+
+
+
+
+
+

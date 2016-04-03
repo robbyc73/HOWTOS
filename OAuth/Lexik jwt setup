@@ -1,0 +1,24 @@
+
+composer create-project symfony/framework-standard-edition /var/www/html/apilexik 2.4.10
+cd apilexik
+
+//set perms on cache dirs
+HTTPDUSER=`ps aux | grep -E '[a]pache|[h]ttpd|[_]www|[w]ww-data|[n]ginx' | grep -v root | head -1 | cut -d\  -f1` ;
+sudo setfacl -R -m u:"$HTTPDUSER":rwX -m u:`whoami`:rwX var/cache var/logs var/sessions ;
+sudo setfacl -dR -m u:"$HTTPDUSER":rwX -m u:`whoami`:rwX var/cache var/logs var/sessions
+
+
+//install lexik jwt bundle using the instructions here
+https://github.com/lexik/LexikJWTAuthenticationBundle/blob/master/Resources/doc/index.md 
+
+//instaal gfreeau bundle
+https://github.com/gfreeau/GfreeauGetJWTBundle
+
+
+//user pwd stored in security.yml
+//login check
+curl -X POST http://localhost:8000/api/login_check -d _username=user -d _password=userpass
+
+//get a token
+curl -X POST http://localhost:8000/api/getToken -d _username=user -d _password=userpass
+

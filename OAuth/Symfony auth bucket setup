@@ -1,0 +1,61 @@
+// with symfony 3.0
+symfony new authbucket
+
+cd authbucket
+
+//set perms on cache dirs
+HTTPDUSER=`ps aux | grep -E '[a]pache|[h]ttpd|[_]www|[w]ww-data|[n]ginx' | grep -v root | head -1 | cut -d\  -f1` ;
+sudo setfacl -R -m u:"$HTTPDUSER":rwX -m u:`whoami`:rwX var/cache var/logs var/sessions ;
+sudo setfacl -dR -m u:"$HTTPDUSER":rwX -m u:`whoami`:rwX var/cache var/logs var/sessions
+
+// get the oauth bundle
+composer require authbucket/oauth2-symfony-bundle
+
+//update AppKernel.php
+new AuthBucket\Bundle\OAuth2Bundle\AuthBucketOAuth2Bundle(),
+
+/*To enable the built-in controller with corresponding routing, add the following into your routing.yml, all above controllers will be enabled accordingly with routing prefix /api/oauth2:*/
+
+# app/config/routing.yml
+
+authbucketoauth2bundle:
+    prefix:     /api/oauth2
+    resource:   "@AuthBucketOAuth2Bundle/Resources/config/routing.yml"
+
+//modify securtiy settings
+#app/config/security.yml
+security:
+    encoders:
+        Symfony\Component\Security\Core\User\User: plaintext
+
+    providers:
+        default:
+            memory:
+                users:
+                    demousername1:  { roles: 'ROLE_USER', password: demopassword1 }
+                    demousername2:  { roles: 'ROLE_USER', password: demopassword2 }
+                    demousername3:  { roles: 'ROLE_USER', password: demopassword3 }
+
+    firewalls:
+        api_oauth2_authorize:
+            pattern:                ^/api/oauth2/authorize$
+            http_basic:             ~
+            provider:               default
+
+        api_oauth2_token:
+            pattern:                ^/api/oauth2/token$
+            oauth2_token:           ~
+
+        api_oauth2_debug:
+            pattern:                ^/api/oauth2/debug$
+            oauth2_resource:        ~
+
+        api_resource:
+            pattern:                ^/api/resource
+            oauth2_resource:
+                resource_type:      model
+                scope:              [ demoscope1 ]
+
+
+
+

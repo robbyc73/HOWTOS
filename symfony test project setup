@@ -1,0 +1,835 @@
+// directories configured in apache, change in 000-defaults.conf
+/var/www/html
+
+
+//note proxy must be added to /etc/environment as address without http:// prefix, otherwise symfony throws an error!
+// use this command to update symfony, as self update doesnt work with the proxy
+sudo curl --proxy 10.222.109.10:80 -LvsS http://symfony.com/installer -o /usr/local/bin/symfony 
+
+//without proxy
+sudo curl -vLsS http://symfony.com/installer:80 -o /usr/local/bin/symfony
+
+sudo chmod a+x /usr/local/bin/symfony
+
+//install composer
+curl --proxy 10.222.109.10:80 -LvsS https://getcomposer.org/installer | php
+sudo mv composer.phar /usr/local/bin/composer
+
+// change to your projects dir e.g. /var/www/webservices/BigRedSkyASAP/symfony_projects
+//export HTTP_PROXY=10.222.109.10:80
+
+//give write permissions before running this command, as sudo doesnt 
+// see proxy settings?
+symfony new todoapp 2.8
+
+//or use composer for legacy versions
+composer create-project symfony/framework-standard-edition /var/www/html/behat 2.4.10 
+
+//verify php is properly configured, only with version 2
+php app/check.php
+
+//make sure date/time setting in php.ini set for both apache2 and php cli
+
+
+//these dirs need permissions set for 2.8
+//sudo chmod -R 777 /var/www/html/todoapp/app/cache ;
+//sudo chmod -R 777 /var/www/html/todoapp/app/logs ;
+//sudo chmod -R 777 /var/www/html/todoapp/app/cache/dev // why does this dir need to be done again after reboot
+
+//set access for dirs properly
+HTTPDUSER=`ps aux | grep -E '[a]pache|[h]ttpd|[_]www|[w]ww-data|[n]ginx' | grep -v root | head -1 | cut -d\  -f1` ;
+sudo setfacl -R -m u:"$HTTPDUSER":rwX -m u:`whoami`:rwX app/cache app/logs ;
+sudo setfacl -dR -m u:"$HTTPDUSER":rwX -m u:`whoami`:rwX app/cache app/logs
+
+
+
+//symfony 3 write permissions, different directories
+//sudo chmod -R 777 /var/www/html/todoapp/var
+
+HTTPDUSER=`ps aux | grep -E '[a]pache|[h]ttpd|[_]www|[w]ww-data|[n]ginx' | grep -v root | head -1 | cut -d\  -f1` ;
+sudo setfacl -R -m u:"$HTTPDUSER":rwX -m u:`whoami`:rwX var/cache var/logs ;
+sudo setfacl -dR -m u:"$HTTPDUSER":rwX -m u:`whoami`:rwX var/cache var/logs
+
+//run all cmds after changed into the proj dir
+cd todoapp
+
+//update project dependencies via command line, add FOS bundle
+composer require friendsofsymfony/user-bundle ^1.3
+
+//clearing cache after changes made, needed this when altering existing view file
+php app/console cache:clear ;
+php app/console cache:clear --env=prod --no-debug ;
+
+//test everything is working by going to e.g.
+// http://localhost/todoapp/web/app_dev.php
+// should get a welcome to symfony message
+
+// recreate AppBundle
+rm -rf src/AppBundle
+vi app/AppKernel.php
+//remove line AppBundle\AppBundle(),
+
+
+vi app/config/routing.yml
+/* remove
+* 
+app:
+
+resource: @AppBundle/Controller/
+
+type: annotation
+*/
+
+// put into source code control
+rm -fr .git
+git init
+git add .
+git commit 
+
+// generate app bundle again and use defaults except for specifying yml, can call this whatever you want as long as it ends in 'Bundle'
+php app/console generate:bundle --namespace=AppBundle
+
+//or put in subdir, e.g. Yoda\EventBundle
+php app/console generate:bundle
+
+
+//add new routes to AppBundle routing.yml
+gedit src/AppBundle/resources/config/routing.yml
+
+//new route, with name var, use default name if none passed through, can have as many vars in route as required, wrap in curly brackets
+hello:
+    path:     /hello/{name}
+    defaults: { _controller: AppBundle:Default:index, name: 'anonymous' }
+
+// can have a twig template e.g. src/AppBundle/resources/views/index.twig.html containing
+Hello {{name}}
+
+//in controller action
+return $this->render('AppBundle:Default:index.html.twig', array('name' => $name));
+
+//or use default location app/Resources/views
+return $this->render('default/index.html.twig', array('name' => $name));
+
+//or return a Response, JsonResponse object
+
+
+//modify the view to display symfony profiler, extend from the base template
+{% extends '::base.html.twig' %}
+
+{% block body %}
+
+Hello {{ name }}!
+
+{% endblock body %}
+
+
+/*
+* database setup
+*/
+
+//install, just set root pwd to root for now
+sudo apt-get install mysql-server mysql-client phpMyAdmin
+
+//connect to mysql db, create a db
+mysql -u root -p
+create database todoapp
+mysql -u root -p todoapp
+
+//alternate way of creating db based on php app/console
+php bin/console doctrine:database:create
+
+parameters:
+    database_driver:    pdo_mysql
+    database_host:      localhost
+    database_port:      null
+    database_name:      todoapp
+    database_user:      root
+    database_password:  root
+
+//add to app/config/config.yml(this should have already been done)
+doctrine:
+    dbal:
+        driver:   pdo_mysql
+        host:     "%database_host%"
+        port:     "%database_port%"
+        dbname:   "%database_name%"
+        user:     "%database_user%"
+        password: "%database_password%"
+        charset:  UTF8
+
+
+/*
+* Creating Entities
+*/
+
+// 1. create files manually then run php app/console to validate, generate getter setters and schema, put shcema in db
+//create your entities Tag.php and Task.php(see src/AppBundle/Entity folder)
+
+//validate the schema, will fail on mapping file
+php app/console doctrine:schema:validate
+
+//generate getters/setters
+php app/console doctrine:generate:entities --no-backup AppBundle
+
+//generate DB schema
+php app/console doctrine:schema:update --dump-sql
+
+//put the schema in the db
+php app/console doctrine:schema:update --force
+
+
+// 2. create entities via the command line, enter all the required fields one by one, with their types, length, nullable etc.
+ php app/console generate:doctrine:entity --entity=TestBundle:JobSeeker
+ php app/console doctrine:generate:entities --no-backup TestBundle
+ php app/console doctrine:schema:update --dump-sql
+ php app/console doctrine:schema:update --force
+
+// TODO make a crud controller, yes to write, yml format and default route
+// this will generate a list, a form for adding editing records, delete, and the links to navigate between
+php bin/console doctrine:generate:crud
+
+
+/*
+* Creating Fixtures, for test data
+*/
+composer require doctrine/doctrine-fixtures-bundle
+
+//add to app/AppKernel.php
+$bundles[] = new Doctrine\Bundle\FixturesBundle\DoctrineFixturesBundle();
+
+//check has been added
+php app/console
+
+//create LoadTagData.php in src/AppBundle/DataFixtures/ORM
+
+//load the Data in LoadTagData.php into the db
+php app/console doctrine:fixtures:load
+
+
+
+
+/*
+*  Assetic, for serving up compressed minifed js, css file see config.yml
+*/
+composer require symfony/assetic-bundle
+
+// add following to app/AppKernel.php
+new Symfony\Bundle\AsseticBundle\AsseticBundle(),
+
+// add following min config to app/config/config.yml
+assetic:
+    debug:          '%kernel.debug%'
+    use_controller: '%kernel.debug%'
+    filters:
+        cssrewrite: ~
+
+//clear the cache to use
+php app/console cache:clear ;
+php app/console cache:clear --env=prod
+
+/*
+* Handling 3rd party bundles js, css etc. by symlinking
+*/
+php app/console assets:install --symlink
+
+
+/*
+* Semantic UI, download from http://1.semantic-ui.com/
+*/
+wget https://github.com/Semantic-Org/Semantic-UI/archive/1.12.2.zip ;
+unzip -d semantic 1.12.2.zip
+//copy from dir dist
+mkdir -p /var/www/html/testapp/web/css/vendor/semantic-ui ;
+mkdir -p /var/www/html/testapp/web/js/vendor/semantic-ui ;
+cp -R semantic/Semantic-UI-1.12.2/dist/themes /var/www/html/testapp/web/css/vendor/semantic-ui/. ;
+cp semantic/Semantic-UI-1.12.2/dist/semantic.min.css /var/www/html/testapp/web/css/vendor/semantic-ui ;
+cp semantic/Semantic-UI-1.12.2/dist/semantic.min.js /var/www/html/testapp/web/js/vendor/semantic-ui ;
+
+mkdir -p /var/www/html/starwarsevents/web/css/vendor/semantic-ui ;
+mkdir -p /var/www/html/starwarsevents/web/js/vendor/semantic-ui ;
+cp -R ~/Downloads/Semantic-UI-1.12.2/dist/themes /var/www/html/starwarsevents/web/css/vendor/semantic-ui/. ;
+cp ~/Downloads/Semantic-UI-1.12.2/dist/semantic.min.css /var/www/html/starwarsevents/web/css/vendor/semantic-ui ;
+cp ~/Downloads/Semantic-UI-1.12.2/dist/semantic.min.js /var/www/html/starwarsevents/web/js/vendor/semantic-ui ;
+
+/*Our own styles will be placed in the files that will be placed in 
+
+web/css/dev/app.css 
+and 
+web/js/dev/app.js 
+
+so create them (they are empty for now). After you do this, your web/css directory should contain the following:*/
+
+mkdir /var/www/html/starwarsevents/web/css/dev ;
+mkdir /var/www/html/starwarsevents/web/js/dev ;
+touch /var/www/html/starwarsevents/web/css/dev/app.css ;
+touch /var/www/html/starwarsevents/web/js/dev/app.js
+
+mkdir /var/www/html/testapp/web/css/dev ;
+mkdir /var/www/html/testapp/web/js/dev ;
+touch /var/www/html/testapp/web/css/dev/app.css ;
+touch /var/www/html/testapp/web/js/dev/app.js
+
+//configure project to handle these files
+// create new view and controller to handle the tasks list
+
+
+
+// 1. manually create the controller and view
+//view
+mkdir -p /var/www/html/todoapp/app/Resources/views/task ;
+touch /var/www/html/todoapp/app/Resources/views/task/list.html.twig
+
+//view code page 34
+
+//controller
+touch /var/www/html/todoapp/src/AppBundle/Controller/TaskController.php
+
+//controller code page 35, returns list view
+
+
+// 2. create the controller and view via php app/console cmd
+php app/console generate:controller --controller=TestBundle:JobSeeker // this will prompt for action and template names, auto generating both controller and view under the bundle dir!
+php app/console generate:controller --actions=showJobSeekerAction:/jobseekers:TestBundle:JobSeeker:js_list.html.twig
+
+ 
+
+// modify the src/AppBundle/Resources/config/routing.yml file by replacing
+// its content with the following:
+
+homepage:
+    path: /
+    defaults: { _controller: AppBundle:Task:list }
+
+//should see unstyled task list at:
+http://localhost/todoapp/web/app_dev.php
+
+//add css, js to app/Resources/base.html.twig, see page 35
+
+// create the css files, why does dump to prod not work but dev does??
+
+php app/console cache:clear
+
+php app/console assetic:dump
+php app/console assetic:dump --env=prod
+
+//to add any changes to css, put in web/css/dev/app.css and run assetic dump cmd, will be copied to prod
+
+// remove default controller and views
+rm /var/www/html/testapp/app/Resources/views/default/index.html.twig ;
+rm /var/www/html/testapp/src/TestBundle/Controller/DefaultController.php ;
+rm /var/www/html/testapp/src/TestBundle/Resources/views/Default/index.html.twig
+
+
+/* 
+*creating a list of tasks
+*/
+
+// Modify the src/AppBundle/Entity/Task.php to have finished var(p38), save and close the file, then update the schema
+php app/console doctrine:schema:update --force ;
+php app/console doctrine:generate:entities --no-backup AppBundle
+
+// add an example task to the db, code p38
+touch /var/www/html/todoapp/src/AppBundle/DataFixtures/ORM/LoadTaskData.php
+php app/console doctrine:fixtures:load
+
+//modify /var/www/html/todoapp/src/AppBundle/Controller/TaskController.php to retrieve the example record from the DB, code p39
+
+//add  tag object to ref table, p41
+
+//modify task to retrieve reference previously added in tag p42, remember add use statememnts for interfaces/abstract classes and update extends, implements accordingly!
+
+php app/console doctrine:fixtures:load
+
+
+/* 
+*form creation, validation, and save data separate form code from controller, code p48
+*/
+
+//1. create TaskType.php manually
+mkdir -p /var/www/html/todoapp/src/AppBundle/Form/Type ;
+touch /var/www/html/todoapp/src/AppBundle/Form/Type/TaskType.php
+
+// 2. create a form using app/console, will be created under Form dir, name JobSeekerType.php, basic template created, need to add em and add button
+php app/console generate:doctrine:form TestBundle:JobSeeker
+
+./bin/console generate:doctrine:form   
+
+//modify TaskController to create a form passing through task as arg, 
+// when rendering pass through tasks and form obj p49
+
+// add form to list.html.twig
+
+// default values to constructor in Task.php
+
+// modify Task.php to support validation e.g. name field required, use Constraint and Assert, Code and Constraint Examples p51
+
+// modify TaskController.php to save form data and redirect to homepage, p52
+
+
+/*
+* styling a form
+*/
+
+// create own theme, p53
+mkdir /var/www/html/todoapp/app/Resources/views/Form ;
+touch /var/www/html/todoapp/app/Resources/views/Form/theme.html.twig
+
+//modify list.html.twig to use, p54
+
+// modify TaskType class to style submit, p55
+
+php app/console cache:clear
+
+
+/*
+* Data Transformer, present objects(tags) as cs vals -> convert back to tags and vice versa, enter on form comma separated p56
+*/
+mkdir /var/www/html/todoapp/app/Resources/views/Form/DataTransformer ;
+touch /var/www/html/todoapp/app/Resources/views/Form/DataTransformer/TagDataTransformer.php
+
+//To use the data transformer, we need to modify our TaskType form class and the buildForm method, p57
+
+// update TaskController to createForm with the $em var as an extra arg, p58
+
+//TODO create data transformers as a service, own data type
+
+/*
+*Chapter 5, security and handling users
+*/
+
+//add previously installed FOS bundle to AppKernel.php
+new FOS\UserBundle\FOSUserBundle(),
+
+//create the user config file app/config/fos/user.yml, see page 63
+mkdir /var/www/html/todoapp/app/config/fos ;
+touch /var/www/html/todoapp/app/config/fos/user.yml
+
+//add user.yml under imports section in config.yml
+
+//uncomment translator section in config.yml
+  translator:      { fallbacks: ["%locale%"] }
+
+// modify security.yml, see p65
+
+//create User entity
+touch /var/www/html/todoapp/src/AppBundle/Entity/User.php
+
+//generate get/set and schema update
+php app/console doctrine:generate:entities --no-backup AppBundle ;
+php app/console doctrine:schema:update --force
+
+//add fos_user_security to routing.yml, handles logout, login
+fos_user_security:
+    resource: "@FOSUserBundle/Resources/config/routing/security.xml"
+    prefix: /
+
+php app/console cache:clear
+
+
+// to style the view override the existing view by placing a template in the FOSUserBundle dir
+// e.g. app/Resources/FOSUserBundle/views/Security/login.html.twig
+mkdir -p app/Resources/FOSUserBundle/views/Security ;
+touch app/Resources/FOSUserBundle/views/Security/login.html.twig
+
+// template code p66
+
+//update Task.php to handle User p68, update schema, then generate
+php app/console doctrine:schema:update --force ;
+php app/console doctrine:generate:entities --no-backup AppBundle
+
+//update fixtures by adding LoadUserData.php to create a test user, code p69
+touch src/AppBundle/DataFixtures/ORM/LoadUserData.php
+
+//update fixtures by modifying LoadTaskData.php to set user
+$obj->setUser($this->getReference('user:todo'));
+
+// reload fixtures
+php app/console doctrine:fixtures:load
+
+//MOdify task controller to filter tasks by users, and add user to newly created task, code p70, remember add setUser call after form getData call!
+
+// add logout code to base.html.twig, just after opening body tag, p70
+
+// registration, part of FOS bundle, add to routing.yml and security.yml, enable template, link to the registration form, code p71,72
+mkdir app/Resources/FOSUserBundle/views/Registration ;
+touch app/Resources/FOSUserBundle/views/Registration/register.html.twig ;
+touch app/Resources/FOSUserBundle/views/Registration/confirmed.html.twig
+
+//link register under app/Resources/views/base.html.twig, add just after body tag p72,73
+
+/*
+* TODO Chapter 6 translations
+*/
+
+/*
+* Chapter 7 AJAX
+*/
+
+//install the REST features
+composer require jms/serializer-bundle ;
+composer require friendsofsymfony/rest-bundle ;
+composer require friendsofsymfony/jsrouting-bundle ;
+composer require nelmio/api-doc-bundle ;
+
+//add to AppKernel.php, p88
+
+//configure FOSRest bundle, create file app/config/fos/rest.yml with:
+mkdir -p app/config/fos ;
+touch app/config/fos/rest.yml
+
+//config
+fos_rest:
+    routing_loader:
+        default_format: json
+        include_format: false
+
+//configure Nelmio bundle, create file app/config/nelmio/api_doc.yml with:
+mkdir app/config/nelmio ;
+touch app/config/nelmio/api_doc.yml ;
+
+//config
+nelmio_api_doc:
+    name: TODO App
+
+// import configuration in config.yml
+imports:
+    # .. previous bundles
+    - { resource: fos/rest.yml }
+    - { resource: nelmio/api_doc.yml }
+
+// add Nelmio bundle to app/config/routing.yml
+NelmioApiDocBundle:
+    resource: "@NelmioApiDocBundle/Resources/config/routing.yml"
+    prefix: /api/doc
+
+// add to access control in app/config/security.yml
+    - { path: ^/api/doc$, role: IS_AUTHENTICATED_ANONYMOUSLY }
+
+// add FOSJSRoutingBundle to app/config/routing.yml, and install the asset
+fos_js_routing:
+    resource: "@FOSJsRoutingBundle/Resources/config/routing/routing.xml"
+
+php app/console assets:install --symlink web/
+
+// modify app/Resources/views/base.html.twig file's javascripts block to have fosrouting includes, p90
+
+// modify app/Resources/views/task/list.html.twig to have edit/remove/finish links, remove add form to another file form.html.twig, and include in list.html.twig
+touch app/Resources/views/task/form.html.twig 
+
+// 1. create task api controller which extends FOSRestController and import ApiDocBundle, p94,95,96
+touch app/src/AppBundle/Controller/TaskApiController.php
+
+// 2. use generate controller statement to
+php app/console generate:controller --controller=TestBundle:TaskApi 
+
+//add to app/config/routing.yml
+api:
+    resource: "@AppBundle/Controller/TaskApiController.php"
+    prefix: /api
+    type: rest
+    options: { expose: true }
+
+php app/console cache:clear
+
+//see current routes
+php app/console fos:js-routing:debug
+
+
+//add ajax code to app.js, p98 and run assetic, TODO need add form to be edit form when ID present
+
+
+
+/*
+*  ch 8 CMd line operations
+*/
+//to create a console cmd, create a special class with the 'Command' suffix under src/AppBundle/Command, enables symfony to attach class to the Symfony2 app console
+
+//1. manually create, see page 102
+php app/console todo:hello rob
+
+
+//2. create via cmd line, this way all you have to do is add the argument to output, class is created for you!
+php app/console generate:command
+
+// output of above
+First, you need to give the name of the bundle where the command will
+be generated (e.g. AppBundle)
+ 
+Bundle name: AppBundle
+
+Now, provide the name of the command as you type it in the console
+(e.g. app:my-command)
+
+Command name: app:hello-world
+
+                             
+  Summary before generation  
+                             
+
+You are going to generate a app:hello-world command inside AppBundle bundle.
+Do you confirm generation [yes]? yes
+Generated the app:hello-world command in AppBundle
+
+// custom cmd
+php app/console app:hello-world rob // outputs hello rob, no arg defauls to hello world
+
+php app/console app:hello-world --help // outputs description of cmd
+
+
+
+//INSTALL sstmp and configure to relay outbound emails through gmail address
+sudo apt-get install sstmp
+sudo apt-get install mailutils
+
+//edit /etc/ssmtp/ssmtp.conf with gmail account settings, ensure machine name is set instead of localhost
+//edit /etc/ssmtp/revaliases
+
+// update parameters.yml
+parameters:
+    database_host: localhost
+    database_port: null
+    database_name: todoapp
+    database_user: root
+    database_password: root
+    mailer_transport: gmail
+    mailer_user: gmailuser
+    mailer_password: gmailpwd
+    secret: 992c13434ffd31258e2d4acf1004b45f404ba732
+
+
+//udpate config.yml
+swiftmailer:
+    transport: "%mailer_transport%"
+    username:  "%mailer_user%"
+    password:  "%mailer_password%"
+    spool:     { type: memory }
+
+
+// create a send mail on finished date cmd
+php app/console generate:command
+
+// add code from p105 to Command class, execute function gets a users tasks, and checks which have a due date of today, and sends an email for each
+
+// configure swiftmailer, uncomment config_dev.yml so will send to dev's email address only
+swiftmailer:
+    delivery_address: rcampbell@bigredsky.com
+
+
+/*
+* Ch9 Symfony profiling and debugging, click on toolbar to access
+*/
+Displays config
+Outputs error/exception messages for forms, routing etc.
+can view requests
+query times
+logs
+user roles
+catch dumped variables
+
+// to dump add the following code to a controller(wont work in production), need request object and tasks object
+dump(['hello' => 'world!']);
+
+ dump($request);
+
+ dump($tasks);
+
+// create own profile section by creating a data collector, src/AppBundle/Collector/TaskDataCollector, p116
+
+//create a view for displaying data form the collector app/Resources/views/collectors/tasks.html.twig p118
+
+// update app/config/services.yml to have the following
+    data_collector.tasks:
+        class: AppBundle\Collector\TaskDataCollector
+        arguments: ['@doctrine.orm.entity_manager']
+        tags:
+          - { name: data_collector, template: 'collectors/tasks.html.twig', id: 'tasks' }
+
+// add stopwatch to a specific controller so can see how long it will take to execute, e.g. TaskController.
+$watch = $this->get('debug.stopwatch');
+$watch->start('Fetching Tasks');
+//execution code
+$watch->stop('Fetching Tasks');
+
+
+/*
+* Ch 10 Prepare an Appn for Prod
+*/
+
+// run appn server in prod mode, remove any debug code and clear the cache first!
+// any errors look at logs
+php app/console cache:clear --env=prod ;
+php app/console server:run --env=prod
+
+
+  //dev only debug code
+     if ($this->get('kernel')->getEnvironment() == 'dev') {
+         dump(['hello' => 'world!']);
+         dump($request);
+         dump($tasks);
+     }
+
+// add an error page for prod, download the twig bundle
+composer require symfony/twig-bundle
+
+// and add the following to app/config/config.yml under twig section
+    exception_controller:  twig.controller.exception:showAction
+
+//To execute the config check on the web server, you can simply upload the basic 
+//Symfony2 project, edit web/config.php by adding your IP address to the access 
+//rules, and type http://<yourserverdomain>/config.php. 
+http://localhost/todoapp/web/config.php
+
+//run check form cmd line
+php app/check.php
+
+//install any recommendations
+sudo apt-get install php5-intl
+
+//check any security issues
+php app/console security:check
+
+
+//see all available services
+
+
+
+//install node and uglify, for linux mint make sure you specify the nodejs executable in config.yml!
+
+http://symfony.com/doc/current/cookbook/assetic/uglifyjs.html
+
+//config.yml
+assetic:
+    node: /usr/bin/nodejs
+    debug:          '%kernel.debug%'
+    use_controller: '%kernel.debug%'
+    filters:
+        cssrewrite: ~
+        uglifyjs2:
+            bin: /usr/local/bin/uglifyjs
+        uglifycss:
+            bin: /usr/local/bin/uglifycss
+
+//add filters to base.html in css and js sections respectively, question mark ensures only runs against prod, makes debugging easier in dev
+filter='?uglifycss'
+filter='?uglifyjss'
+
+
+// dump assets
+bin/console assetic:dump
+
+//clear cache
+bin/console cache:clear
+
+
+//can add custom form themes via creating a template at ::form_them.html.twig
+//need to add to config.yml, allows to override any of symfonys core form layout blocks
+# Twig Configuration
+twig:
+    debug:            "%kernel.debug%"
+    strict_variables: "%kernel.debug%"
+    form_themes:
+        - "::form_theme.html.twig"
+
+//modify form_theme.html.twig to have custom styling utilizing bootstrap classes such as form-group, help-block and has-error
+//use conditional statement to assign error class only when error for specific field 
+{%  block form_row %}
+{%  spaceless %}
+<div class="form-group {{ errors|length > 0 ? 'has-error' }}">
+    {{ form_label(form) }}
+    {{ form_errors(form) }}
+    {{ form_widget(form) }}
+</div>
+{% endspaceless %}
+{% endblock form_row %}
+{%- block form_errors -%}
+    {%- if errors|length > 0 -%}
+        <u class="help-block">
+            {%- for error in errors -%}
+                <li>{{ error.message }}</li>
+            {%- endfor -%}
+        </ul>
+    {%- endif -%}
+{%- endblock form_errors -%}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
